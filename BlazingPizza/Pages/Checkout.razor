@@ -3,8 +3,10 @@
 @inject OrderState OrderState
 @inject HttpClient HttpClient
 @inject NavigationManager NavigationManager
+@implements IDisposable
 
 <div class="main">
+    <EditForm EditContext=editContext OnValidSubmit=PlaceOrder >
     <div class="checkout-cols">
         <div class="checkout-order-details">
             <h4>
@@ -14,26 +16,53 @@
         </div>
         <div class="checkout-delivery-address">
             <h4>Deliver to...</h4>
+            @if (isError)
+                {
+                    <div class="alert alert-danger">Please enter a name and address.</div>
+                }
             <AddressEditor Address="order.DeliveryAddress" />
         </div>
     </div>
 
-    <button class="checkout-button btn btn-warning" @onclick="PlaceOrder" disabled=@isSubmitting>
+    <button class="checkout-button btn btn-warning" type="submit" disabled=@isError>
         Place Order
-    </button>
+     </button>
+
+     <DataAnnotationsValidator />
+     </EditForm>
 </div>
 
 @code {
+    EditContext editContext;
     Order order => OrderState.Order;
-    bool isSubmitting;
 
-    async Task PlaceOrder()
+    bool isError = true;
+    protected override void OnInitialized()
     {
-        isSubmitting = true;
+        editContext = new(order.DeliveryAddress);
+        editContext.OnFieldChanged += HandleFieldChanged;
+    }
+    private void HandleFieldChanged(object sender, FieldChangedEventArgs e)
+    {
+        isError = !editContext.Validate();
+        StateHasChanged();
+    }
+    async Task PlaceOrder()
+    {   
+
         var response = await HttpClient.PostAsJsonAsync(NavigationManager.BaseUri + "orders", OrderState.Order);
         var newOrderId = await response.Content.ReadFromJsonAsync<int>();
         OrderState.ResetOrder();
         NavigationManager.NavigateTo($"/myorders/{newOrderId}");
-        
+
     }
+    protected void ShowError()
+    {
+        isError = true;
+    }
+    public void Dispose()
+    {
+        editContext.OnFieldChanged -= HandleFieldChanged;
+    }
+
 }
